@@ -1,0 +1,73 @@
+from fastapi import FastAPI, Query, HTTPException
+імпортуються класи та функції з бібліотеки fastapi
+
+from typing import List Імпортується 
+Імпортується тип List з модуля typing — потрібен для анотації типу списку валют у запиті
+
+import requests 
+Імпортується бібліотека requests для надсилання HTTP-запитів до зовнішніх API (наприклад, Monobank API)
+
+app = FastAPI() 
+Створюється об'єкт app, що є основою FastAPI-додатку
+
+currency_map = {"USD": 840, "EUR": 978, "JPY": 392}
+код валют та самі валюти згідно банку
+
+@app.get("/")
+def root():
+    return {"message": "Сервіс працює! Щоб отримати курси валют, зверніться до /rates"}
+Визначається маршрут за адресою /
+При зверненні до нього користувач отримає JSON-відповідь з повідомленням про те, що сервіс працює
+
+@app.get("/rates")
+def get_rates(
+    currencies: List[str] = Query(..., description="Валюти для перевірки")
+):
+Визначається маршрут /rates.
+Функція приймає параметр currencies як список валютних кодів з запиту. Наприклад: /rates?currencies=USD&currencies=EUR
+Query(...) означає, що параметр є обов’язковим.
+description="Валюти для перевірки" — опис параметру для автоматичної документації (Swagger UI)
+
+response = requests.get("https://api.monobank.ua/bank/currency")
+Надсилається GET-запит до публічного API Monobank
+
+  if response.status_code != 200:
+        raise HTTPException(status_code=500, detail="Monobank API error")
+Якщо відповідь не має статусу 200 OK то, зявляється (внутрішня помилка сервера) з відповідним повідомленням
+
+    all_data = response.json()
+відповідь від Monobank яка зберігається у змінну all_data як список словників
+
+  result = {}
+Ініціалізується порожній словник result, куди буде записано курси валют, які запитав користувач
+
+for item in all_data:
+        code_a = item.get("currencyCodeA")
+        code_b = item.get("currencyCodeB")
+Ітерація по кожному елементу списку all_data (дані про курси валют)
+code_a — валюта, яка продається/купується
+code_b — валюта, щодо якої обчислюється курс (у моєму випадку 980 — гривня)
+
+ for name, code in currency_map.items():
+            if code_a == code and code_b == 980 and name in currencies:
+Ітерація по словнику currency_map, щоб знайти відповідності між введеними валютами і кодами
+Умова перевіряє:
+чи є code_a у списку кодів, що нас цікавлять,
+чи це курс відносно гривні (code_b == 980),
+чи введена валюта міститься у параметрах currencies
+
+ result[name] = {
+                    "rateBuy": item.get("rateBuy", "—"),
+                    "rateSell": item.get("rateSell", "—")
+                
+Якщо умови виконуються, у результат записується словник з курсом купівлі та продажу для конкретної валюти
+Якщо поля відсутні, використовується символ "—"
+
+  return result
+Повертається фінальний словник з валютами та їх курсами
+
+
+
+
+
+
